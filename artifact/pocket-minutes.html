@@ -1,0 +1,832 @@
+<title>Pocket Minutes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: app bar over a two-pane shell — meeting log on the left, the open meeting on the right; one pane at a time on phones. */
+  :root {
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --ink: #141c22;
+    --muted: #5b6873;
+    --line: #d8dee4;
+    --accent: #2343c4;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3e8fb;
+    --rec: #d23b2f;
+    --ok: #1f7a4d;
+    --warn: #9a5b00;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1317; --surface: #161e24; --ink: #e6ebef; --muted: #93a0aa; --line: #26313a;
+      --accent: #8ea0ff; --accent-ink: #0e1317; --accent-soft: #1f2748; --rec: #ff6b5e; --ok: #5fd39a; --warn: #f0b552;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1317; --surface: #161e24; --ink: #e6ebef; --muted: #93a0aa; --line: #26313a;
+    --accent: #8ea0ff; --accent-ink: #0e1317; --accent-soft: #1f2748; --rec: #ff6b5e; --ok: #5fd39a; --warn: #f0b552;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+  h1 { font-size: 1.75rem; font-weight: 700; }
+  h2 { font-size: 1.05rem; font-weight: 700; }
+  h3 { font-size: 0.78rem; font-family: var(--font-body); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--muted); }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); padding: 0.5rem 0.85rem; font-weight: 500; }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover { color: var(--ink); border-color: var(--line); }
+  button.danger { color: var(--rec); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type="text"], input[type="search"], input[type="email"], input[type="datetime-local"], textarea {
+    width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.7rem;
+  }
+  textarea { resize: vertical; line-height: 1.55; }
+  label { display: grid; gap: 0.3rem; font-weight: 500; font-size: 0.9rem; }
+  label .hint { font-weight: 400; color: var(--muted); font-size: 0.82rem; }
+
+  .app { display: flex; flex-direction: column; height: 100%; }
+  .bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+    padding-block: 0.6rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .brand { display: flex; align-items: center; gap: 0.55rem; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; }
+  .rec { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 4px color-mix(in srgb, var(--rec) 18%, transparent); }
+  .bar-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px minmax(0, 1fr); }
+  .list-pane { border-right: 1px solid var(--line); overflow-y: auto; padding-block: 1rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 16px; display: flex; flex-direction: column; gap: 0.75rem; }
+  .list-head { display: flex; align-items: baseline; justify-content: space-between; }
+  #meeting-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+  .m-item { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; padding: 0.6rem 0.7rem; display: grid; gap: 0.2rem; }
+  .m-item:hover { background: var(--surface); border-color: var(--line); }
+  .m-item[aria-current="true"] { background: var(--surface); border-color: var(--accent); }
+  .m-item .t { font-weight: 600; overflow-wrap: anywhere; }
+  .m-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .chip { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; padding: 0.08rem 0.45rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .chip.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .empty-list { color: var(--muted); font-size: 0.9rem; padding: 0.5rem 0.2rem; }
+  .storage-note { font-size: 0.8rem; color: var(--muted); }
+
+  main { overflow-y: auto; min-width: 0; padding-block: 1.5rem 3rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.4rem; }
+  .page-head { display: grid; gap: 0.35rem; }
+  .capture { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .capture > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; display: grid; gap: 0.35rem; align-content: start; }
+  .capture ol { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.88rem; }
+  .form { display: grid; gap: 1rem; }
+  .row2 { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 0.75rem; }
+  .tx-tools { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.75rem; background: var(--surface); cursor: pointer; font-size: 0.88rem; font-weight: 500; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .status { font-size: 0.88rem; color: var(--muted); min-height: 1.3em; }
+  .status.err { color: var(--rec); }
+
+  .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 0.55rem 0.8rem; color: var(--muted); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .section { display: grid; gap: 0.55rem; }
+  .summary { font-size: 1.02rem; max-width: 65ch; }
+  .bullets { margin: 0; padding-left: 1.15rem; display: grid; gap: 0.3rem; max-width: 65ch; }
+  .todo { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+  .todo li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.6rem; align-items: start; padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
+  .todo input { width: 1.1rem; height: 1.1rem; margin-top: 0.2rem; accent-color: var(--accent); }
+  .todo .done .task { text-decoration: line-through; color: var(--muted); }
+  .todo .who { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .export { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; display: grid; gap: 0.6rem; }
+  .export a { color: var(--accent); }
+  .transcript { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; max-height: 70vh; overflow-y: auto; font-size: 0.93rem; }
+  .chat { display: grid; gap: 0.75rem; }
+  .bubble { padding: 0.7rem 0.9rem; border-radius: var(--radius); max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.q { justify-self: end; background: var(--accent-soft); }
+  .bubble.a { background: var(--surface); border: 1px solid var(--line); }
+  .ask-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: end; }
+  .suggest { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .suggest button { font-size: 0.82rem; padding: 0.3rem 0.6rem; border-radius: 999px; }
+  .working { display: flex; gap: 0.6rem; align-items: center; color: var(--muted); }
+  .pulse { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  .example-flag { background: var(--accent-soft); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.88rem; }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 20;
+    background: var(--ink); color: var(--bg); padding: 0.55rem 1rem; border-radius: 8px; font-size: 0.9rem; max-width: calc(100% - 32px);
+  }
+  .mobile-only { display: none; }
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .list-pane { border-right: 0; padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    .app[data-mobile-view="main"] .list-pane { display: none; }
+    .app[data-mobile-view="list"] main { display: none; }
+    .mobile-only { display: inline-flex; }
+    .capture, .row2 { grid-template-columns: minmax(0, 1fr); }
+    h1 { font-size: 1.45rem; }
+  }
+</style>
+
+<div class="app" id="app" data-mobile-view="main">
+  <header class="bar">
+    <div class="brand"><span class="rec" aria-hidden="true"></span>Pocket Minutes</div>
+    <div class="bar-actions">
+      <button id="btn-list" class="ghost mobile-only" type="button">Meetings</button>
+      <button id="btn-settings" class="ghost" type="button">Settings</button>
+      <button id="btn-new" class="primary" type="button">New meeting</button>
+    </div>
+  </header>
+  <div class="shell">
+    <aside class="list-pane" id="list-pane">
+      <div class="list-head"><h2>Meetings</h2><span class="mono" id="count"></span></div>
+      <input id="search" type="search" placeholder="Search notes and transcripts" aria-label="Search meetings">
+      <ul id="meeting-list"><li class="empty-list">Your meetings will show up here after you save the first one.</li></ul>
+      <p class="storage-note" id="storage-note">Connecting to your saved meetings…</p>
+    </aside>
+    <main id="main"></main>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- tiny DOM helper ----------
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "value") el.value = v;
+      else if (k === "checked") el.checked = !!v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3200);
+  }
+
+  function store(key, val) {
+    try { if (val === undefined) return localStorage.getItem(key); if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val); } catch { return null; }
+  }
+
+  // ---------- state ----------
+  const state = {
+    meetings: new Map(),   // id -> meeting body
+    settings: {},
+    view: "new",           // new | meeting | settings
+    selectedId: null,
+    tab: "notes",
+    search: "",
+    generating: new Map(), // id -> AbortController
+    asking: null,          // AbortController while an answer streams
+    askDraft: "",
+    storage: "connecting", // connecting | db | memory
+  };
+
+  let coll = null, sample = null, mcp = null;
+  const writeChains = new Map();
+
+  // One write at a time per document.
+  function queueWrite(id, fn) {
+    const prev = writeChains.get(id) || Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    writeChains.set(id, next);
+    return next;
+  }
+
+  async function saveDoc(id, body) {
+    if (!coll) { state.meetings.set(id, structuredClone(body)); refresh(); return; }
+    return queueWrite(id, () => coll.doc(id).set(body));
+  }
+  async function patchDoc(id, patch) {
+    if (!coll) {
+      const cur = state.meetings.get(id) || {};
+      state.meetings.set(id, deepMerge(structuredClone(cur), patch)); refresh(); return;
+    }
+    return queueWrite(id, () => coll.doc(id).update(patch));
+  }
+  async function removeDoc(id) {
+    if (!coll) { state.meetings.delete(id); refresh(); return; }
+    return queueWrite(id, () => coll.doc(id).delete());
+  }
+  function deepMerge(a, b) {
+    for (const [k, v] of Object.entries(b)) {
+      if (v && typeof v === "object" && !Array.isArray(v) && a[k] && typeof a[k] === "object" && !Array.isArray(a[k])) deepMerge(a[k], v);
+      else a[k] = v;
+    }
+    return a;
+  }
+
+  // ---------- formatting ----------
+  function fmtDate(iso, withTime = true) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const opts = { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" };
+    if (withTime) Object.assign(opts, { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleString([], opts);
+  }
+  const wordCount = (s) => (String(s || "").trim().match(/\S+/g) || []).length;
+  function talkTime(words) {
+    if (!words) return "0 words";
+    const min = Math.max(1, Math.round(words / 140));
+    return words.toLocaleString() + " words · ~" + min + " min of talk";
+  }
+  function localInputValue(d) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  // Strip cue numbers and timestamps from .vtt / .srt caption files.
+  function cleanCaptions(text, name) {
+    if (!/\.(vtt|srt)$/i.test(name || "") && !/^WEBVTT/.test(text)) return text.trim();
+    const out = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line === "WEBVTT" || /^\d+$/.test(line) || /-->/.test(line) || /^(NOTE|STYLE|REGION)\b/.test(line)) continue;
+      const clean = line.replace(/<[^>]+>/g, "");
+      if (out[out.length - 1] !== clean) out.push(clean);
+    }
+    return out.join("\n");
+  }
+
+  // ---------- list pane ----------
+  function sortedMeetings() {
+    return [...state.meetings.entries()].sort((a, b) => String(b[1].startedAt || "").localeCompare(String(a[1].startedAt || "")));
+  }
+  function renderList() {
+    const list = $("meeting-list");
+    const q = state.search.trim().toLowerCase();
+    const all = sortedMeetings();
+    const rows = all.filter(([, m]) => !q || [m.title, m.transcript, m.notes?.summary, (m.notes?.topics || []).join(" ")].join(" ").toLowerCase().includes(q));
+    $("count").textContent = all.length ? all.length + (all.length === 1 ? " meeting" : " meetings") : "";
+    list.replaceChildren();
+    if (!all.length) {
+      list.append(h("li", { class: "empty-list" }, "Your meetings will show up here after you save the first one."));
+    } else if (!rows.length) {
+      list.append(h("li", { class: "empty-list" }, "No meetings match “" + state.search.trim() + "”."));
+    }
+    for (const [id, m] of rows) {
+      const open = (m.notes?.actionItems || []).filter((a) => !a.done).length;
+      let chip;
+      if (state.generating.has(id)) chip = h("span", { class: "chip accent" }, "Writing notes");
+      else if (m.notes) chip = h("span", { class: "chip ok" }, "Notes ready");
+      else chip = h("span", { class: "chip warn" }, "Transcript only");
+      list.append(h("li", {},
+        h("button", {
+          class: "m-item", type: "button", "aria-current": state.view === "meeting" && state.selectedId === id ? "true" : "false",
+          onclick: () => openMeeting(id),
+        },
+          h("span", { class: "t" }, m.title || "Untitled meeting"),
+          h("span", { class: "m-meta" },
+            h("span", { class: "mono" }, fmtDate(m.startedAt)),
+            m.example ? h("span", { class: "chip" }, "Example") : null,
+            chip,
+            open ? h("span", { class: "mono" }, open + " to do") : null,
+          ),
+        ),
+      ));
+    }
+    const note = $("storage-note");
+    note.textContent = state.storage === "db" ? "Saved to your claude.ai account. Only you can see these."
+      : state.storage === "memory" ? "Not saved: open this page in claude.ai while signed in to keep your meetings."
+      : "Connecting to your saved meetings…";
+  }
+
+  // ---------- router ----------
+  function setMobileView(v) { $("app").dataset.mobileView = v; }
+  function openMeeting(id) {
+    state.view = "meeting"; state.selectedId = id; state.tab = "notes"; state.askDraft = "";
+    setMobileView("main"); renderAll(); $("main").scrollTop = 0;
+  }
+  function openNew() { state.view = "new"; state.selectedId = null; setMobileView("main"); renderAll(); }
+  function openSettings() { state.view = "settings"; state.selectedId = null; setMobileView("main"); renderAll(); }
+  function renderAll() { renderList(); renderMain(); }
+  // Called when stored data changes. Leave the composer and a streaming answer alone.
+  function refresh() {
+    renderList();
+    if (state.view === "meeting" && !state.asking) {
+      if (!state.meetings.has(state.selectedId)) { openNew(); return; }
+      renderMain();
+    }
+    if (state.view === "settings") renderMain();
+  }
+  function renderMain() {
+    const main = $("main");
+    if (state.view === "meeting" && state.meetings.has(state.selectedId)) main.replaceChildren(renderMeeting(state.selectedId));
+    else if (state.view === "settings") main.replaceChildren(renderSettings());
+    else { state.view = "new"; main.replaceChildren(renderComposer()); }
+  }
+
+  // ---------- composer ----------
+  function renderComposer() {
+    const draft = JSON.parse(store("pm-draft") || "{}");
+    const tx = h("textarea", { id: "tx", rows: "12", placeholder: "Paste the transcript here, or tap here and use the keyboard’s mic key to dictate.", value: draft.transcript || "" });
+    const title = h("input", { id: "title", type: "text", placeholder: "Leave blank and Claude will name it", value: draft.title || "" });
+    const when = h("input", { id: "when", type: "datetime-local", value: draft.when || localInputValue(new Date()) });
+    const people = h("input", { id: "people", type: "text", placeholder: "e.g. Maya, Coach R, Dev", value: draft.people || "" });
+    const meter = h("span", { class: "mono" }, talkTime(wordCount(tx.value)));
+    const status = h("p", { class: "status", id: "compose-status" });
+
+    const saveDraft = () => store("pm-draft", JSON.stringify({ transcript: tx.value, title: title.value, when: when.value, people: people.value }));
+    let draftTimer;
+    const onEdit = () => { meter.textContent = talkTime(wordCount(tx.value)); clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); };
+    for (const el of [tx, title, when, people]) el.addEventListener("input", onEdit);
+
+    const file = h("input", { id: "tx-file", type: "file", accept: ".txt,.vtt,.srt,.md,text/plain", "aria-label": "Load a transcript file" });
+    file.addEventListener("change", async () => {
+      const f = file.files?.[0]; if (!f) return;
+      if (f.size > 2_000_000) { status.className = "status err"; status.textContent = "That file is over 2 MB. Load a plain-text transcript instead."; return; }
+      const text = cleanCaptions(await f.text(), f.name);
+      tx.value = tx.value.trim() ? tx.value.trim() + "\n\n" + text : text;
+      if (!title.value.trim()) title.value = f.name.replace(/\.[^.]+$/, "");
+      onEdit(); status.className = "status"; status.textContent = "Loaded " + f.name + ".";
+      file.value = "";
+    });
+
+    async function submit(withNotes) {
+      const transcript = tx.value.trim();
+      if (wordCount(transcript) < 20) { status.className = "status err"; status.textContent = "Add a transcript of at least a few sentences first."; tx.focus(); return; }
+      if (transcript.length > 200_000) { status.className = "status err"; status.textContent = "This transcript is very long (" + transcript.length.toLocaleString() + " characters). Split it into two meetings of under 200,000 characters each."; return; }
+      const id = "m-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const startedAt = when.value ? new Date(when.value).toISOString() : new Date().toISOString();
+      const body = {
+        kind: "meeting", title: title.value.trim(), startedAt, people: people.value.trim(), transcript,
+        notes: null, qa: [], exports: {}, createdAt: new Date().toISOString(),
+      };
+      try { await saveDoc(id, body); }
+      catch (e) { status.className = "status err"; status.textContent = dbErrorCopy(e); return; }
+      store("pm-draft", null);
+      state.meetings.set(id, body);
+      openMeeting(id);
+      if (withNotes) generateNotes(id);
+    }
+
+    const writeBtn = h("button", { class: "primary", type: "button", onclick: () => submit(true) }, "Write the notes");
+    const saveBtn = h("button", { type: "button", onclick: () => submit(false) }, "Save transcript only");
+    if (!sample) { writeBtn.disabled = true; writeBtn.title = "Open this page in claude.ai to have Claude write notes."; }
+
+    return h("div", { class: "page" },
+      h("div", { class: "page-head" },
+        h("h1", {}, "New meeting"),
+        h("p", { class: "mono" }, "Phone on the table, transcript in, notes out."),
+      ),
+      h("div", { class: "capture" },
+        h("div", {},
+          h("h2", {}, "Record with Voice Memos"),
+          h("ol", {},
+            h("li", {}, "Open Voice Memos, set the phone face-up on the table, tap record."),
+            h("li", {}, "After the meeting, open the recording and tap the transcript button."),
+            h("li", {}, "Copy the transcript and paste it below."),
+          ),
+        ),
+        h("div", {},
+          h("h2", {}, "Dictate live"),
+          h("ol", {},
+            h("li", {}, "Tap the transcript box below."),
+            h("li", {}, "Tap the mic key on your keyboard and leave the screen on."),
+            h("li", {}, "Dictation pauses on silence. Tap the mic key again if it stops."),
+          ),
+        ),
+      ),
+      h("div", { class: "form" },
+        h("div", { class: "row2" },
+          h("label", { for: "title" }, "Title", title),
+          h("label", { for: "when" }, "When", when),
+        ),
+        h("label", { for: "people" }, h("span", {}, "Who was there ", h("span", { class: "hint" }, "(optional, helps Claude assign action items)")), people),
+        h("div", { class: "section" },
+          h("label", { for: "tx" }, "Transcript"),
+          tx,
+          h("div", { class: "tx-tools" }, meter, h("span", { class: "file-btn" }, "Load .txt, .vtt or .srt", file)),
+        ),
+        h("div", { class: "actions" }, writeBtn, saveBtn),
+        status,
+        !sample ? h("p", { class: "status" }, "Writing notes needs Claude, which this page can only reach inside claude.ai.") : null,
+      ),
+    );
+  }
+
+  // ---------- notes generation ----------
+  function notesPrompt(m) {
+    const transcript = m.transcript.length > 180_000 ? m.transcript.slice(0, 180_000) + "\n[transcript cut off here]" : m.transcript;
+    return [
+      "You are writing meeting notes from a transcript that was recorded on a phone lying on a table during an in-person meeting.",
+      "The transcript probably has no speaker labels and may contain speech-recognition mistakes. Infer sensibly, but never invent facts, names, dates or commitments that are not in the transcript.",
+      "",
+      "Meeting date: " + new Date(m.startedAt).toDateString(),
+      "Title given by the user: " + (m.title || "(none, so propose a short, specific title)"),
+      "People present: " + (m.people || "(not given)"),
+      "",
+      "Reply with only one JSON object of exactly this shape:",
+      '{"title": "short specific title, max 60 characters", "summary": "3-5 plain sentences on what the meeting covered and concluded", "decisions": ["each decision that was actually agreed"], "actionItems": [{"task": "verb-first task", "owner": "person responsible, or empty string if unclear", "due": "deadline as said, or empty string"}], "openQuestions": ["questions raised but not settled"], "topics": ["up to 6 short topic tags"]}',
+      "Use empty arrays when there is nothing for a field.",
+      "",
+      "Transcript:",
+      '"""',
+      transcript,
+      '"""',
+    ].join("\n");
+  }
+
+  async function generateNotes(id) {
+    const m = state.meetings.get(id);
+    if (!m || !sample || state.generating.has(id)) return;
+    const ctl = new AbortController();
+    state.generating.set(id, ctl);
+    state.notesError = null;
+    refresh(); if (state.view === "meeting" && state.selectedId === id) renderMain();
+    try {
+      const r = await sample.json(notesPrompt(m), { signal: ctl.signal, cache: false });
+      if (!r || typeof r !== "object") throw { code: "invalid_json" };
+      const arr = (v) => (Array.isArray(v) ? v : []).map((x) => String(x ?? "").trim()).filter(Boolean);
+      const notes = {
+        summary: String(r.summary || "").trim(),
+        decisions: arr(r.decisions),
+        actionItems: (Array.isArray(r.actionItems) ? r.actionItems : [])
+          .map((a) => ({ task: String(a?.task || "").trim(), owner: String(a?.owner || "").trim(), due: String(a?.due || "").trim(), done: false }))
+          .filter((a) => a.task),
+        openQuestions: arr(r.openQuestions),
+        topics: arr(r.topics).slice(0, 6),
+        writtenAt: new Date().toISOString(),
+      };
+      const patch = { notes };
+      const cur = state.meetings.get(id);
+      if (cur && !cur.title && r.title) patch.title = String(r.title).slice(0, 80);
+      await patchDoc(id, patch);
+      toast("Notes written.");
+    } catch (e) {
+      if (e?.code !== "cancelled") { state.notesError = { id, msg: sampleErrorCopy(e) }; }
+    } finally {
+      state.generating.delete(id);
+      refresh(); if (state.view === "meeting" && state.selectedId === id && !state.asking) renderMain();
+    }
+  }
+
+  function sampleErrorCopy(e) {
+    switch (e?.code) {
+      case "not_granted": return "Claude wasn’t allowed for this page. Reload the page and choose Allow when asked.";
+      case "sampling_disabled": return "Claude isn’t available on this account, so notes can’t be written here.";
+      case "rate_limited": return "You’ve reached a usage limit. Wait a few minutes, then try again.";
+      case "session_expired": return "Your claude.ai session expired. Sign in again, then try again.";
+      case "prompt_too_large": return "The transcript is too long for one pass. Split it into two meetings.";
+      case "invalid_json": return "Claude’s reply came back in a form the page couldn’t read. Try again.";
+      case "refused": return "Claude declined to write notes for this transcript.";
+      case "empty_completion": return "Claude returned an empty reply. Try again.";
+      default: return "Something interrupted Claude. Try again.";
+    }
+  }
+  function dbErrorCopy(e) {
+    switch (e?.code) {
+      case "quota_exceeded": return "Your meeting storage is full. Delete a few old meetings, then save again.";
+      case "resource_exhausted": return "Too many saves at once. Wait a moment, then try again.";
+      case "invalid_argument": return "This meeting is too large to save. Split the transcript into two meetings.";
+      default: return "The meeting couldn’t be saved. Check your connection and try again.";
+    }
+  }
+
+  // ---------- meeting view ----------
+  function renderMeeting(id) {
+    const m = state.meetings.get(id);
+    const words = wordCount(m.transcript);
+    const tabBtn = (key, label) => h("button", {
+      class: "tab", type: "button", role: "tab", "aria-selected": state.tab === key ? "true" : "false",
+      onclick: () => { state.tab = key; renderMain(); },
+    }, label);
+
+    let body;
+    if (state.tab === "transcript") body = h("div", { class: "transcript" }, m.transcript);
+    else if (state.tab === "ask") body = renderAsk(id, m);
+    else body = renderNotes(id, m);
+
+    return h("div", { class: "page" },
+      h("div", { class: "page-head" },
+        h("h1", {}, m.title || (state.generating.has(id) ? "Naming this meeting…" : "Untitled meeting")),
+        h("p", { class: "mono" }, [fmtDate(m.startedAt), talkTime(words), m.people ? "with " + m.people : ""].filter(Boolean).join("  ·  ")),
+      ),
+      m.example ? h("p", { class: "example-flag" }, "This is an example meeting so you can see what the notes look like. Delete it whenever you like.") : null,
+      h("div", { class: "tabs", role: "tablist" }, tabBtn("notes", "Notes"), tabBtn("ask", "Ask"), tabBtn("transcript", "Transcript")),
+      body,
+    );
+  }
+
+  function renderNotes(id, m) {
+    const gen = state.generating.get(id);
+    const err = state.notesError?.id === id ? state.notesError.msg : null;
+    if (gen) {
+      return h("div", { class: "section" },
+        h("div", { class: "working" }, h("span", { class: "pulse", "aria-hidden": "true" }), "Claude is reading the transcript and writing notes. This usually takes 20 to 60 seconds."),
+        h("div", { class: "actions" }, h("button", { type: "button", onclick: () => gen.abort() }, "Stop")),
+      );
+    }
+    if (!m.notes) {
+      return h("div", { class: "section" },
+        h("p", {}, "No notes yet for this meeting."),
+        err ? h("p", { class: "status err" }, err) : null,
+        h("div", { class: "actions" },
+          h("button", { class: "primary", type: "button", disabled: !sample, onclick: () => generateNotes(id) }, "Write the notes"),
+          deleteButton(id),
+        ),
+      );
+    }
+    const n = m.notes;
+    const items = n.actionItems || [];
+    const openCount = items.filter((a) => !a.done).length;
+
+    const todo = h("ul", { class: "todo" }, items.map((a, i) => h("li", { class: a.done ? "done" : "" },
+      h("input", {
+        type: "checkbox", id: "ai-" + id + "-" + i, checked: a.done, "aria-label": "Mark done: " + a.task,
+        onchange: (ev) => {
+          const next = items.map((x, j) => (j === i ? { ...x, done: ev.target.checked } : x));
+          patchDoc(id, { notes: { actionItems: next } }).catch((e) => toast(dbErrorCopy(e)));
+        },
+      }),
+      h("div", {},
+        h("div", { class: "task" }, a.task),
+        (a.owner || a.due) ? h("div", { class: "who mono" }, a.owner ? a.owner : null, a.due ? "due " + a.due : null) : null,
+      ),
+    )));
+
+    const list = (arr) => h("ul", { class: "bullets" }, arr.map((x) => h("li", {}, x)));
+
+    return h("div", { class: "page", style: "gap:1.4rem" },
+      err ? h("p", { class: "status err" }, err) : null,
+      h("div", { class: "section" }, h("h3", {}, "Summary"), h("p", { class: "summary" }, n.summary || "No summary.")),
+      h("div", { class: "section" },
+        h("h3", {}, "Action items" + (items.length ? "  ·  " + openCount + " of " + items.length + " open" : "")),
+        items.length ? todo : h("p", { class: "status" }, "No action items came out of this meeting."),
+      ),
+      n.decisions?.length ? h("div", { class: "section" }, h("h3", {}, "Decisions"), list(n.decisions)) : null,
+      n.openQuestions?.length ? h("div", { class: "section" }, h("h3", {}, "Still open"), list(n.openQuestions)) : null,
+      n.topics?.length ? h("div", { class: "chips" }, n.topics.map((t) => h("span", { class: "chip" }, t))) : null,
+      renderExport(id, m),
+      h("div", { class: "actions" },
+        h("button", { type: "button", class: "ghost", disabled: !sample, onclick: () => generateNotes(id) }, "Rewrite the notes"),
+        deleteButton(id),
+      ),
+    );
+  }
+
+  function deleteButton(id) {
+    let armed = false, timer;
+    const btn = h("button", { type: "button", class: "ghost danger" }, "Delete meeting");
+    btn.addEventListener("click", async () => {
+      if (!armed) {
+        armed = true; btn.textContent = "Tap again to delete"; btn.classList.remove("ghost");
+        timer = setTimeout(() => { armed = false; btn.textContent = "Delete meeting"; btn.classList.add("ghost"); }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      try { await removeDoc(id); state.meetings.delete(id); toast("Meeting deleted."); openNew(); }
+      catch (e) { toast(dbErrorCopy(e)); }
+    });
+    return btn;
+  }
+
+  // ---------- export ----------
+  function toMarkdown(m, withTranscript) {
+    const n = m.notes || {};
+    const out = ["# " + (m.title || "Untitled meeting"), "", fmtDate(m.startedAt) + (m.people ? " · with " + m.people : ""), ""];
+    out.push("## Summary", "", n.summary || "", "");
+    if (n.actionItems?.length) { out.push("## Action items", ""); for (const a of n.actionItems) out.push("- [" + (a.done ? "x" : " ") + "] " + a.task + (a.owner ? " — " + a.owner : "") + (a.due ? " (due " + a.due + ")" : "")); out.push(""); }
+    if (n.decisions?.length) { out.push("## Decisions", ""); for (const d of n.decisions) out.push("- " + d); out.push(""); }
+    if (n.openQuestions?.length) { out.push("## Still open", ""); for (const q of n.openQuestions) out.push("- " + q); out.push(""); }
+    if (withTranscript) out.push("## Full transcript", "", m.transcript, "");
+    return out.join("\n");
+  }
+  function toEmailHtml(m) {
+    const n = m.notes || {};
+    const li = (arr, f) => "<ul>" + arr.map((x) => "<li>" + f(x) + "</li>").join("") + "</ul>";
+    let html = "<h2>" + esc(m.title || "Untitled meeting") + "</h2><p style=\"color:#5b6873\">" + esc(fmtDate(m.startedAt)) + (m.people ? " · with " + esc(m.people) : "") + "</p>";
+    html += "<h3>Summary</h3><p>" + esc(n.summary) + "</p>";
+    if (n.actionItems?.length) html += "<h3>Action items</h3>" + li(n.actionItems, (a) => (a.done ? "<s>" : "") + esc(a.task) + (a.done ? "</s>" : "") + (a.owner ? " <b>— " + esc(a.owner) + "</b>" : "") + (a.due ? " (due " + esc(a.due) + ")" : ""));
+    if (n.decisions?.length) html += "<h3>Decisions</h3>" + li(n.decisions, esc);
+    if (n.openQuestions?.length) html += "<h3>Still open</h3>" + li(n.openQuestions, esc);
+    if (m.exports?.docUrl) html += "<p>Full notes and transcript: <a href=\"" + esc(m.exports.docUrl) + "\">Google Doc</a></p>";
+    html += "<p style=\"color:#5b6873;font-size:12px\">Sent from Pocket Minutes</p>";
+    return html;
+  }
+
+  function mcpErrorCopy(e, server, isWrite) {
+    switch (e?.code) {
+      case "server_not_connected": return "Add " + server + " in claude.ai Settings → Connectors, then try again.";
+      case "needs_reauth": return "Reconnect " + server + " in claude.ai Settings → Connectors, then try again.";
+      case "selection_required": return "You have more than one " + server + " connector. Pick one when claude.ai asks, then try again.";
+      case "not_in_manifest": return server + " is turned off for this page. Turn it on from the page’s Permissions menu.";
+      case "approval_required": return "Saving to " + server + " needs your approval. Try again and choose Allow.";
+      case "blocked_by_policy": return "Your organization blocks this " + server + " action.";
+      case "not_granted": case "capability_disabled": case "capability_removed": return server + " can only be reached when this page is open in claude.ai.";
+      case "tool_error": return server + " reported a problem: " + (e.message || "unknown error").slice(0, 200);
+      default: return isWrite ? "The connection to " + server + " dropped mid-way. Check " + server + " before trying again, it may have gone through." : "Couldn’t reach " + server + ". Try again.";
+    }
+  }
+
+  function renderExport(id, m) {
+    const status = h("p", { class: "status" });
+    const ex = m.exports || {};
+    const docLine = ex.docUrl ? h("p", {}, "Saved to Google Docs: ", h("a", { href: ex.docUrl, target: "_blank", rel: "noopener" }, "open the doc")) : null;
+    const mailLine = ex.emailedAt ? h("p", { class: "mono" }, "Emailed " + fmtDate(ex.emailedAt) + (ex.emailedTo ? " to " + ex.emailedTo : "")) : null;
+
+    const docBtn = h("button", { type: "button", disabled: !mcp }, ex.docUrl ? "Save another copy to Google Docs" : "Save to Google Docs");
+    docBtn.addEventListener("click", async () => {
+      docBtn.disabled = true; status.className = "status"; status.textContent = "Creating the Google Doc…";
+      try {
+        const res = await mcp.callTool("Google Drive", "create_file", {
+          title: fmtDate(m.startedAt, false) + " — " + (m.title || "Meeting notes"),
+          textContent: toMarkdown(m, true),
+          contentMimeType: "text/markdown",
+        });
+        const p = res?.payload || {};
+        const fileId = p.id || p.file?.id;
+        const url = p.webViewLink || p.file?.webViewLink || p.alternateLink || (fileId ? "https://docs.google.com/document/d/" + fileId + "/edit" : "");
+        await patchDoc(id, { exports: { docUrl: url || "https://drive.google.com/drive/recent", docSavedAt: new Date().toISOString() } });
+        status.textContent = "Saved to Google Docs.";
+      } catch (e) { status.className = "status err"; status.textContent = mcpErrorCopy(e, "Google Drive", true); }
+      finally { docBtn.disabled = false; }
+    });
+
+    const to = state.settings.email || "";
+    const mailBtn = h("button", { type: "button", disabled: !mcp }, "Email me the notes");
+    mailBtn.addEventListener("click", async () => {
+      const addr = state.settings.email || "";
+      if (!addr) { status.className = "status err"; status.textContent = "Add your email address in Settings first."; return; }
+      mailBtn.disabled = true; status.className = "status"; status.textContent = "Sending to " + addr + "…";
+      try {
+        await mcp.callTool("Gmail", "send_message", {
+          to: [addr],
+          subject: "Meeting notes: " + (m.title || "Untitled meeting") + " (" + fmtDate(m.startedAt, false) + ")",
+          htmlBody: toEmailHtml(m),
+          body: toMarkdown(m, false).replace(/^#+ /gm, "").replace(/^- \[( |x)\] /gm, "- "),
+        });
+        await patchDoc(id, { exports: { emailedAt: new Date().toISOString(), emailedTo: addr } });
+        status.textContent = "Sent to " + addr + ".";
+      } catch (e) { status.className = "status err"; status.textContent = mcpErrorCopy(e, "Gmail", true); }
+      finally { mailBtn.disabled = false; }
+    });
+
+    const copyBtn = h("button", { type: "button", class: "ghost" }, "Copy as text");
+    copyBtn.addEventListener("click", () => {
+      const text = toMarkdown(m, false);
+      navigator.clipboard?.writeText(text).then(() => toast("Notes copied."), () => { state.tab = "transcript"; toast("Copy was blocked. Select the text manually."); });
+    });
+
+    return h("div", { class: "export" },
+      h("h3", {}, "Send it somewhere"),
+      h("div", { class: "actions" }, docBtn, mailBtn, copyBtn),
+      to ? null : h("p", { class: "status" }, "Set your email address in Settings to use “Email me”."),
+      docLine, mailLine, status,
+    );
+  }
+
+  // ---------- ask ----------
+  function renderAsk(id, m) {
+    const qa = m.qa || [];
+    const chat = h("div", { class: "chat", id: "chat" });
+    for (const t of qa) chat.append(h("div", { class: "bubble q" }, t.q), h("div", { class: "bubble a" }, t.a));
+    const input = h("textarea", { id: "ask-input", rows: "2", placeholder: "Ask about this meeting", value: state.askDraft });
+    input.addEventListener("input", () => (state.askDraft = input.value));
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); send(); } });
+    const sendBtn = h("button", { class: "primary", type: "button", disabled: !sample }, "Ask");
+    const status = h("p", { class: "status" });
+
+    async function send(text) {
+      const q = (text ?? input.value).trim();
+      if (!q || state.asking) return;
+      const ctl = new AbortController(); state.asking = ctl;
+      input.value = ""; state.askDraft = ""; sendBtn.disabled = true; status.textContent = "";
+      const qb = h("div", { class: "bubble q" }, q);
+      const ab = h("div", { class: "bubble a" }, h("span", { class: "working" }, h("span", { class: "pulse" }), "Thinking…"));
+      const stop = h("button", { type: "button", onclick: () => ctl.abort() }, "Stop");
+      chat.append(qb, ab); status.replaceChildren(stop);
+      const ctx = [
+        "You answer questions about one in-person meeting, using only its transcript and notes below. Quote or paraphrase the transcript when it helps. If the answer isn’t in the meeting, say so plainly. Keep answers short and plain, no markdown headings.",
+        "Meeting: " + (m.title || "Untitled") + " on " + new Date(m.startedAt).toDateString() + (m.people ? ", with " + m.people : ""),
+        m.notes ? "Notes:\n" + toMarkdown(m, false) : "",
+        'Transcript:\n"""\n' + m.transcript.slice(0, 180_000) + '\n"""',
+      ].join("\n\n");
+      const turns = [{ role: "user", content: ctx }];
+      for (const t of qa.slice(-8)) turns.push({ role: "user", content: t.q }, { role: "assistant", content: t.a });
+      turns.push({ role: "user", content: q });
+      try {
+        const { text: a } = await sample(turns, { cache: false, signal: ctl.signal, onText: ({ text }) => { ab.textContent = text; } });
+        const nextQa = [...qa, { q, a, at: new Date().toISOString() }].slice(-30);
+        state.asking = null;
+        await patchDoc(id, { qa: nextQa });
+      } catch (e) {
+        state.asking = null;
+        if (e?.code === "cancelled") { ab.textContent = e.text || "Stopped."; }
+        else { ab.textContent = e?.text || ""; status.className = "status err"; status.textContent = sampleErrorCopy(e); }
+      } finally {
+        state.asking = null; sendBtn.disabled = !sample;
+        if (status.firstChild === stop) status.replaceChildren();
+      }
+    }
+    sendBtn.addEventListener("click", () => send());
+
+    const ideas = ["What did we decide?", "What do I personally need to do?", "Summarize this in two sentences for someone who missed it", "What was left unresolved?"];
+    return h("div", { class: "section" },
+      qa.length ? null : h("p", { class: "status" }, "Ask anything about this meeting. Claude answers from the transcript."),
+      chat,
+      qa.length ? null : h("div", { class: "suggest" }, ideas.map((t) => h("button", { type: "button", disabled: !sample, onclick: () => send(t) }, t))),
+      h("div", { class: "ask-row" }, input, sendBtn),
+      status,
+      !sample ? h("p", { class: "status" }, "Asking questions needs Claude, which this page can only reach inside claude.ai.") : null,
+    );
+  }
+
+  // ---------- settings ----------
+  function renderSettings() {
+    const email = h("input", { id: "set-email", type: "email", placeholder: "you@gmail.com", value: state.settings.email || "", autocomplete: "email" });
+    const status = h("p", { class: "status" });
+    const save = h("button", { class: "primary", type: "button" }, "Save");
+    save.addEventListener("click", async () => {
+      const v = email.value.trim();
+      if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { status.className = "status err"; status.textContent = "That doesn’t look like an email address."; return; }
+      state.settings = { ...state.settings, email: v };
+      try {
+        if (coll) await queueWrite("settings", () => coll.doc("settings").set({ kind: "settings", email: v }));
+        status.className = "status"; status.textContent = "Saved.";
+      } catch (e) { status.className = "status err"; status.textContent = dbErrorCopy(e); }
+    });
+    return h("div", { class: "page" },
+      h("div", { class: "page-head" }, h("h1", {}, "Settings")),
+      h("div", { class: "form" },
+        h("label", { for: "set-email" }, h("span", {}, "Email notes to ", h("span", { class: "hint" }, "(sent from your own Gmail)")), email),
+        h("div", { class: "actions" }, save), status,
+      ),
+      h("div", { class: "section" },
+        h("h3", {}, "Where things go"),
+        h("ul", { class: "bullets" },
+          h("li", {}, "Meetings are saved privately to your claude.ai account. Nobody you share this page with can see them."),
+          h("li", {}, "“Save to Google Docs” creates a new doc in your Google Drive with the notes and the full transcript."),
+          h("li", {}, "“Email me” sends the notes from your Gmail to the address above."),
+          h("li", {}, "claude.ai asks once before this page uses Claude, Google Drive or Gmail."),
+        ),
+      ),
+    );
+  }
+
+  // ---------- wiring ----------
+  $("btn-new").addEventListener("click", openNew);
+  $("btn-settings").addEventListener("click", openSettings);
+  $("btn-list").addEventListener("click", () => { setMobileView($("app").dataset.mobileView === "list" ? "main" : "list"); renderList(); });
+  $("search").addEventListener("input", (e) => { state.search = e.target.value; renderList(); });
+
+  renderAll();
+
+  const use = (name) => (window.claude?.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null));
+
+  use("sample").then((s) => { sample = s; if (s) renderMain(); });
+  use("mcp").then((m) => { mcp = m; if (m && state.view === "meeting") renderMain(); });
+
+  (async () => {
+    const [dbNs, userNs] = await Promise.all([use("db"), use("user")]);
+    const uid = userNs ? await userNs.id() : null;
+    if (!dbNs || !uid) { state.storage = "memory"; renderList(); return; }
+    coll = dbNs.collection("data/users/" + uid);
+    state.storage = "db";
+    coll.onSnapshot((snap) => {
+      const next = new Map();
+      for (const d of snap.docs) {
+        const body = d.data(); if (!body) continue;
+        if (body.kind === "meeting") next.set(d.id, body);
+        else if (d.id === "settings") state.settings = body;
+      }
+      state.meetings = next;
+      refresh();
+    }, (e) => {
+      if (e?.code === "revoked") { coll = null; state.storage = "memory"; renderList(); }
+      else toast("Live sync stopped. Reload the page to reconnect.");
+    });
+  })();
+})();
+</script>
