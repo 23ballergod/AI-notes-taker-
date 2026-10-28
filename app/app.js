@@ -9,6 +9,7 @@
   const SLICE_MS = 5000;                // save to disk every 5 s
   const INLINE_MAX = 14 * 1024 * 1024;  // bigger files go through the Gemini File API
   const FALLBACK_MODEL = "gemini-2.5-flash";
+  const APP_VERSION = "4";
 
   // ---------- small helpers ----------
   function h(tag, attrs, ...kids) {
@@ -1115,6 +1116,7 @@
         h("h3", {}, "This phone"),
         usage,
         h("p", { class: "caption" }, "Meetings, audio and your key are stored only in this app on this phone. Deleting the app from your home screen deletes them."),
+        h("p", { class: "caption" }, "App version " + APP_VERSION + "."),
       ),
     );
   }

@@ -1,6 +1,6 @@
 // Offline shell: fetch the app's own files fresh when online (so updates show up at once), fall back to cache offline.
 // Gemini requests are cross-origin and always go to the network.
-const CACHE = "pocket-minutes-v3";
+const CACHE = "pocket-minutes-v4";
 const SHELL = [
   "./",
   "index.html",
