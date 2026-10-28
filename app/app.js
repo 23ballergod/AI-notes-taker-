@@ -111,7 +111,7 @@
     if (e?.name === "AbortError") return "Stopped.";
     switch (e?.kind) {
       case "nokey": return "Add your Gemini API key in Settings first.";
-      case "badkey": return "Gemini didn’t accept your API key. Check it in Settings.";
+      case "badkey": return "Gemini didn’t accept your API key. Copy it again from AI Studio and paste it in Settings." + (e.message ? " (Google said: " + e.message.slice(0, 160) + ")" : "");
       case "forbidden": return "Your API key isn’t allowed to use this. Make a new key at aistudio.google.com/apikey and paste it in Settings.";
       case "model": return "The model “" + model() + "” isn’t available to your key. Pick another one in Settings.";
       case "daily": return "You’ve used today’s free Gemini allowance. It resets around midnight Pacific time. Your audio is saved, so tap Try again tomorrow.";
@@ -164,6 +164,7 @@
       }
       if (st === 429 || st >= 500) throw new GemError("busy", msg, st);
       if (st === 404) throw new GemError("model", msg, st);
+      if (st === 401) throw new GemError("badkey", msg, st);
       if (st === 403) throw new GemError("forbidden", msg, st);
       if (st === 400 && /api key/i.test(msg)) throw new GemError("badkey", msg, st);
       if (st === 400 && /mime|format|unsupported|audio|decode/i.test(msg)) throw new GemError("format", msg, st);
@@ -202,7 +203,7 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data?.error?.message || "";
-      if (res.status === 400 && /api key/i.test(msg)) throw new GemError("badkey", msg);
+      if (res.status === 401 || (res.status === 400 && /api key/i.test(msg))) throw new GemError("badkey", msg);
       if (res.status === 403) throw new GemError("forbidden", msg);
       throw new GemError("other", msg);
     }
@@ -1060,9 +1061,12 @@
 
     const check = h("button", { class: "primary", type: "button" }, "Save and check key");
     check.addEventListener("click", async () => {
-      const k = key.value.trim();
+      // Pasted keys sometimes pick up spaces or line breaks; keys never contain them.
+      const k = key.value.replace(/\s+/g, "");
+      key.value = k;
       if (!k) { keyStatus.className = "status err"; keyStatus.textContent = "Paste a key first."; return; }
-      if (!/^[A-Za-z0-9_-]{30,60}$/.test(k)) { keyStatus.className = "status err"; keyStatus.textContent = "That doesn’t look like a Gemini API key. It should be one long code with no spaces, usually starting with AIza."; return; }
+      // Google issues more than one key format (AIza…, AQ.…), so only reject what can't be a key.
+      if (k.length < 20 || k.length > 512 || /[^\x21-\x7e]/.test(k)) { keyStatus.className = "status err"; keyStatus.textContent = "That doesn’t look like a Gemini API key. Copy it again from aistudio.google.com/apikey."; return; }
       pref.set("key", k);
       check.disabled = true; keyStatus.className = "status"; keyStatus.textContent = "Checking with Gemini…";
       try {
@@ -1135,6 +1139,11 @@
   })();
 
   if ("serviceWorker" in navigator && location.protocol === "https:") {
+    // When a new version is published, switch to it right away (but never mid-recording or mid-processing).
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController && !rec.active && !jobs.size) location.reload();
+    });
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 })();
