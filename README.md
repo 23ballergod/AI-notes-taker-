@@ -53,9 +53,30 @@ app and can be saved to Google Docs or emailed to yourself.
 
 ### Hosting
 
-`.github/workflows/pages.yml` publishes `app/` to GitHub Pages on every push to `main`
-that touches it. GitHub Pages needs either a **public** repo or a paid GitHub plan for a
-private one. Turn it on once in **Settings → Pages → Source: GitHub Actions**.
+`.github/workflows/pages.yml` publishes `app/` to GitHub Pages at
+`https://23ballergod.github.io/AI-notes-taker-/` on every push to `main` that touches it.
+Turn it on once in **Settings → Pages → Source: GitHub Actions** (the repo must be public
+on a free GitHub plan).
+
+### Security: why a public repo doesn't expose your key
+
+- **The key is never in this repo.** You type it into the app's Settings on your phone.
+  It's stored only in that app's storage on that phone and sent only to Google's Gemini
+  API over HTTPS. Anyone can read the code; nobody can read your key from it.
+- **A strict Content Security Policy** (`app/index.html`) lets the page run only its own
+  files and talk only to itself and `generativelanguage.googleapis.com`. Even if a script
+  were somehow injected, it couldn't load or send the key anywhere else.
+- **No third-party scripts, fonts or trackers** are loaded.
+- **`.gitignore`** blocks `.env` and key files, and GitHub push protection blocks pushes
+  that contain Google API keys.
+- **Lock the key to this site** (Google Cloud Console → APIs & Services → Credentials →
+  your key):
+  - Application restrictions → **Websites** → `https://23ballergod.github.io/*`
+  - API restrictions → **Restrict key** → **Generative Language API**
+- **Don't attach billing** to the key's Google Cloud project. A free-tier key with no
+  billing can't cost money; the worst case if it ever leaked is someone using up your free
+  daily allowance. Delete and recreate the key in AI Studio if that ever happens.
+- **Remove key from this phone** in Settings wipes it from the device.
 
 ### Run it locally
 

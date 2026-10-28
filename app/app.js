@@ -260,7 +260,7 @@
       });
     } catch (e) { if (e.name === "AbortError") throw e; throw new GemError("toolarge", e.message); }
     const url = start.headers.get("x-goog-upload-url");
-    if (!start.ok || !url) throw new GemError("toolarge", "upload start failed");
+    if (!start.ok || !url || !url.startsWith(API + "/")) throw new GemError("toolarge", "upload start failed");
     const up = await fetch(url, {
       method: "POST", signal,
       headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", "Content-Length": String(blob.size) },
@@ -1060,8 +1060,10 @@
 
     const check = h("button", { class: "primary", type: "button" }, "Save and check key");
     check.addEventListener("click", async () => {
-      pref.set("key", key.value.trim());
-      if (!key.value.trim()) { keyStatus.className = "status err"; keyStatus.textContent = "Paste a key first."; return; }
+      const k = key.value.trim();
+      if (!k) { keyStatus.className = "status err"; keyStatus.textContent = "Paste a key first."; return; }
+      if (!/^[A-Za-z0-9_-]{30,60}$/.test(k)) { keyStatus.className = "status err"; keyStatus.textContent = "That doesn’t look like a Gemini API key. It should be one long code with no spaces, usually starting with AIza."; return; }
+      pref.set("key", k);
       check.disabled = true; keyStatus.className = "status"; keyStatus.textContent = "Checking with Gemini…";
       try {
         const list = await listModels();
@@ -1073,6 +1075,13 @@
       finally { check.disabled = false; }
     });
     if (apiKey()) listModels().then(fillModels).catch(() => {});
+
+    let forgetArmed = false;
+    const forget = h("button", { class: "ghost danger", type: "button" }, "Remove key from this phone");
+    forget.addEventListener("click", () => {
+      if (!forgetArmed) { forgetArmed = true; forget.textContent = "Tap again to remove the key"; return; }
+      pref.set("key", ""); pref.set("model", ""); toast("Key removed from this phone."); render();
+    });
 
     const email = h("input", { id: "set-email", type: "email", value: pref.get("email"), placeholder: "you@gmail.com", autocomplete: "email" });
     email.addEventListener("change", () => { pref.set("email", email.value.trim()); toast("Saved."); });
@@ -1088,10 +1097,11 @@
       h("div", { class: "card solid" },
         h("h3", {}, "Gemini"),
         h("label", { for: "set-key" }, h("span", {}, "API key ", h("span", { class: "hint" }, "(stays on this phone)")), h("div", { class: "ask-row" }, key, show)),
-        h("div", { class: "row" }, check),
+        h("div", { class: "row" }, check, apiKey() ? forget : null),
         keyStatus,
         h("label", { for: "set-model" }, h("span", {}, "Model ", h("span", { class: "hint" }, "(the newest Flash model is picked for you)")), select),
         h("p", { class: "caption" }, "Get a free key at ", h("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "aistudio.google.com/apikey"), ". On the free tier Google may use what you send to improve its products, so let people in the room know you’re recording."),
+        h("p", { class: "caption" }, "Your key is saved only in this app on this phone and is sent only to Google. It is never part of the app’s code or the website."),
       ),
       h("div", { class: "card solid" },
         h("h3", {}, "Sending notes"),

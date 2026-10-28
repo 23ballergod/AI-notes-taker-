@@ -1,6 +1,6 @@
 // Offline shell: serve the app's own files from cache, refresh them in the background.
 // Gemini requests are cross-origin and always go to the network.
-const CACHE = "pocket-minutes-v1";
+const CACHE = "pocket-minutes-v2";
 const SHELL = [
   "./",
   "index.html",

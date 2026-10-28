@@ -1,0 +1,6 @@
+# Never commit secrets. The Gemini API key is entered in the app on the phone, not stored here.
+.env
+.env.*
+*.key
+*.pem
+secrets*
