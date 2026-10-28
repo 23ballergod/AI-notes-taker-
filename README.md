@@ -27,20 +27,40 @@ app and can be saved to Google Docs or emailed to yourself.
 - **Storage:** meetings are kept in the artifact's private per-user database.
 - **Export:** "Save to Google Docs" (Google Drive connector) and "Email me" (Gmail connector).
 
-## Phase 2: portable phone app (next)
+## Phase 2: iPhone web app (built)
 
-The plan is an installable web app (PWA) added to the iPhone home screen. It records
-with the phone mic directly, so no copy-paste. It was picked over a native iOS app because:
+`app/` is an installable web app (PWA). Open it in Safari, tap Share, then
+**Add to Home Screen**, and it runs like a normal app.
 
-- Native iOS for personal use needs a Mac with Xcode. With a free Apple ID the app has
-  to be reinstalled every 7 days. The paid Apple Developer Program is $99/year.
-- A PWA needs no Mac, no fee and no App Store, and installs from Safari with
-  "Add to Home Screen".
-- Its one real limit is that iOS stops web-app recording when the screen locks. For
-  meetings with the phone face-up on a table, a screen wake lock keeps the screen on.
+- **Record:** one tap records with the phone mic. The screen stays on, audio is saved to
+  the phone every 5 seconds, and a new file starts every 10 minutes, so a crash or a
+  closed app loses at most a few seconds. Pause/Resume, a live level meter, and warnings
+  when iOS cuts the mic (lock screen, phone call).
+- **Import:** an existing recording (Voice Memos `.m4a`, `.mp3`, `.wav`…) works too.
+- **Gemini does the AI work, on your own key (free tier):** each 10-minute audio file is
+  sent to Gemini for a timestamped transcript. A second call writes the notes (summary,
+  action items, decisions, open questions, topics). The Ask tab streams answers about the
+  meeting. No separate transcription service is used.
+- **Model:** after you paste your key, the app lists the models your key can use and
+  picks the newest Flash model. You can change it in Settings, and nothing needs
+  changing in AI Studio.
+- **Sharing:** iPhone share sheet (Gmail, Messages, Notes, Google Docs), Email me
+  (opens Mail with the notes filled in), Copy, Save as file.
+- **Privacy:** meetings, audio and the API key live only on the phone (IndexedDB +
+  localStorage). Only the audio/text sent to Gemini leaves it. On Gemini's free tier
+  Google may use what you send to improve its products.
+- **Design:** styled with the Skyglass design system.
 
-Planned stack: static PWA (GitHub Pages) → mic recording with `MediaRecorder` in
-chunks, saved to IndexedDB so a crash doesn't lose audio → speech-to-text API →
-Claude API for notes and Q&A → Google Docs / Gmail export. If background recording
-with the screen locked turns out to matter, the same code can be wrapped in a native
-shell (Expo/Capacitor) later.
+### Hosting
+
+`.github/workflows/pages.yml` publishes `app/` to GitHub Pages on every push to `main`
+that touches it. GitHub Pages needs either a **public** repo or a paid GitHub plan for a
+private one. Turn it on once in **Settings → Pages → Source: GitHub Actions**.
+
+### Run it locally
+
+```bash
+cd app && python3 -m http.server 8000   # then open http://localhost:8000
+```
+
+The mic needs HTTPS on a real phone, so test on the phone through the Pages URL.
