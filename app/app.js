@@ -9,7 +9,7 @@
   const SLICE_MS = 5000;                // save to disk every 5 s
   const INLINE_MAX = 14 * 1024 * 1024;  // bigger files go through the Gemini File API
   const FALLBACK_MODEL = "gemini-2.5-flash";
-  const APP_VERSION = "4";
+  const APP_VERSION = "5";
 
   // ---------- small helpers ----------
   function h(tag, attrs, ...kids) {
@@ -739,6 +739,34 @@
     return out.join("\n");
   }
 
+  // Obsidian note: YAML properties + Tasks-style checkboxes, opened with Obsidian's own obsidian://new link.
+  function obsidianNote(m, withTranscript) {
+    const n = m.notes || {};
+    const day = new Date(m.startedAt);
+    const iso = isNaN(day) ? "" : day.toISOString().slice(0, 10);
+    const q = (v) => JSON.stringify(String(v));
+    const fm = ["---", "date: " + iso, "type: meeting"];
+    if (m.durationMs) fm.push("duration: " + q(clock(m.durationMs)));
+    if (m.people) fm.push("attendees: [" + m.people.split(/\s*,\s*/).filter(Boolean).map(q).join(", ") + "]");
+    fm.push("tags: [" + ["meeting", ...(n.topics || []).map((t) => t.toLowerCase().replace(/[^a-z0-9_/-]+/g, "-").replace(/^-|-$/g, ""))].filter(Boolean).map(q).join(", ") + "]", "---", "");
+    const body = toMarkdown({ ...m, transcript: withTranscript ? m.transcript : "" }).replace(/^# .*\n\n.*\n\n/, "");
+    return fm.join("\n") + body;
+  }
+  function obsidianHref(m) {
+    const iso = new Date(m.startedAt).toISOString().slice(0, 10);
+    const name = (iso + " " + (m.title || "Meeting")).replace(/[\\/:*?"<>|#^\[\]]+/g, "-").slice(0, 120);
+    const folder = (pref.get("obsFolder") || "Meetings").replace(/^\/+|\/+$/g, "");
+    const params = (content) => {
+      const p = [];
+      if (pref.get("obsVault")) p.push("vault=" + encodeURIComponent(pref.get("obsVault")));
+      p.push("file=" + encodeURIComponent((folder ? folder + "/" : "") + name), "content=" + encodeURIComponent(content));
+      return "obsidian://new?" + p.join("&");
+    };
+    // Very long links can fail to open, so fall back to the notes without the transcript.
+    const full = params(obsidianNote(m, true));
+    return full.length < 60000 ? full : params(obsidianNote(m, false));
+  }
+
   // ---------- views ----------
   let view = { name: "home" };
   const ui = { tab: "notes", askDraft: "", asking: null };
@@ -970,9 +998,10 @@
       document.body.append(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     });
+    const obs = h("a", { class: "file-btn", href: obsidianHref(m), style: "text-decoration:none" }, "Send to Obsidian");
     return h("div", { class: "card glass" },
       h("h3", {}, "Send it somewhere"),
-      h("div", { class: "row" }, shareBtn, mail, copyBtn, dl),
+      h("div", { class: "row" }, shareBtn, obs, mail, copyBtn, dl),
       shareBtn ? h("p", { class: "caption" }, "Share opens the iPhone share sheet, so you can send the notes to Gmail, Messages, Notes or Google Docs.") : null,
       status,
     );
@@ -1090,6 +1119,10 @@
 
     const email = h("input", { id: "set-email", type: "email", value: pref.get("email"), placeholder: "you@gmail.com", autocomplete: "email" });
     email.addEventListener("change", () => { pref.set("email", email.value.trim()); toast("Saved."); });
+    const obsVault = h("input", { id: "set-obs-vault", type: "text", value: pref.get("obsVault"), placeholder: "e.g. My Vault", autocapitalize: "off" });
+    obsVault.addEventListener("change", () => { pref.set("obsVault", obsVault.value.trim()); toast("Saved."); });
+    const obsFolder = h("input", { id: "set-obs-folder", type: "text", value: pref.get("obsFolder") || "Meetings", autocapitalize: "off" });
+    obsFolder.addEventListener("change", () => { pref.set("obsFolder", obsFolder.value.trim()); toast("Saved."); });
 
     const usage = h("p", { class: "caption" });
     navigator.storage?.estimate?.().then((e) => { usage.textContent = "Using " + fmtSize(e.usage || 0) + " of storage on this phone."; }).catch(() => {});
@@ -1111,6 +1144,8 @@
       h("div", { class: "card solid" },
         h("h3", {}, "Sending notes"),
         h("label", { for: "set-email" }, h("span", {}, "Your email ", h("span", { class: "hint" }, "(fills in “Email me”)")), email),
+        h("label", { for: "set-obs-vault" }, h("span", {}, "Obsidian vault name ", h("span", { class: "hint" }, "(blank = the vault you last had open)")), obsVault),
+        h("label", { for: "set-obs-folder" }, h("span", {}, "Obsidian folder for meeting notes"), obsFolder),
       ),
       h("div", { class: "card solid" },
         h("h3", {}, "This phone"),
